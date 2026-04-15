@@ -11,9 +11,8 @@ __pycache__/
 *.py[cod]
 *.pyo
 
-# ── Data files (large) ────────────────────────────────────────────────────────
-*.csv
-*.parquet
+# ── Data files (kept local by default, but allowed for this project) ─────────
+# *.parquet
 
 # ── OS / editor ───────────────────────────────────────────────────────────────
 .DS_Store
