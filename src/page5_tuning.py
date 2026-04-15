@@ -45,70 +45,12 @@ def render(bundle: Dict[str, Any]) -> None:
         except Exception:
             pass
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # W&B SETUP SECTION
-    # ══════════════════════════════════════════════════════════════════════════
-    st.subheader("🔐 Weights & Biases Setup")
-    with st.expander("W&B Authentication & Project Config", expanded=True):
-        st.markdown("""
-        **Weights & Biases** (wandb) tracks every experiment run — hyperparameters,
-        metrics, and model performance — so you can compare and reproduce results.
-
-        **Setup Steps:**
-        1. Create a free account at [wandb.ai](https://wandb.ai)
-        2. Copy your API key from **Settings → API Keys**
-        3. Paste it below and click **Login**
-        """)
-
-        col_key, col_proj = st.columns([2, 1])
-        with col_key:
-            wb_api_key = st.text_input(
-                "W&B API Key",
-                value=_env_api_key,
-                type="password",
-                placeholder="Auto-loaded from .env",
-                key="wb_api_key",
-            )
-        with col_proj:
-            wb_project = st.text_input(
-                "W&B Project Name",
-                value=_env_project,
-                key="wb_project",
-            )
-
-        wb_entity = st.text_input(
-            "W&B Entity (username or team)",
-            value=_env_entity,
-            key="wb_entity",
-            placeholder="Auto-loaded from .env",
-        )
-
-        use_wb = st.toggle(
-            "Enable W&B Logging",
-            value=bool(_env_api_key),   # auto-enable when key is in .env
-            key="wb_enable",
-        )
-
-        if _env_api_key and st.session_state.get("_wb_auto_logged_in"):
-            st.success("✅ Auto-logged in via .env credentials.")
-        elif use_wb and st.button("🔑 Login to W&B", key="wb_login_btn"):
-            if wb_api_key:
-                try:
-                    import wandb
-                    wandb.login(key=wb_api_key, relogin=True)
-                    st.session_state["_wb_auto_logged_in"] = True
-                    st.success("✅ Logged in to Weights & Biases successfully!")
-                except Exception as e:
-                    st.error(f"W&B login failed: {e}")
-            else:
-                st.warning("Please enter your W&B API key first.")
-
-        if use_wb:
-            st.info(
-                f"After running the grid search, results will be logged to "
-                f"**{wb_project}** on wandb.ai. "
-                f"View your runs at: https://wandb.ai/{'<entity>/' if not wb_entity else wb_entity+'/'}{wb_project}"
-            )
+    # ── Internal W&B Configuration (HIDDEN) ───────────────────────────────────
+    # We use these variables for the logging loop below
+    use_wb     = bool(_env_api_key)
+    wb_project = _env_project or "energy-forecasting"
+    wb_entity  = _env_entity or None
+    wb_api_key = _env_api_key
 
     st.markdown("---")
 
