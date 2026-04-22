@@ -1,3 +1,12 @@
+---
+title: Energy Forecasting App
+emoji: ⚡
+colorFrom: blue
+colorTo: green
+sdk: gradio
+app_file: app.py
+pinned: false
+---
 # ⚡ Smart Energy Consumption Forecasting Dashboard
 
 A professional, end-to-end machine learning application built with **Streamlit** to predict appliance energy consumption in residential buildings. This project leverages the **UCI Appliances Energy Prediction Dataset** to drive smarter, data-backed building management.
