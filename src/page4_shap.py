@@ -59,14 +59,20 @@ def render(bundle: Dict[str, Any]) -> None:
             explainer = shap.LinearExplainer(model, X_bg)
             shap_vals = explainer.shap_values(X_exp)
             X_df      = pd.DataFrame(X_exp, columns=feat_cols)
-            base_val  = float(explainer.expected_value)
+            
+            # Safe conversion of expected_value (can be array or list in some SHAP versions)
+            ev = explainer.expected_value
+            base_val = float(ev[0]) if isinstance(ev, (list, np.ndarray)) else float(ev)
         else:
             # TreeExplainer — no background needed
             X_exp = X_test.values[:n_explain]
             explainer = shap.TreeExplainer(model)
             shap_vals = explainer.shap_values(X_exp)
             X_df      = pd.DataFrame(X_exp, columns=feat_cols)
-            base_val  = float(explainer.expected_value)
+            
+            # Safe conversion of expected_value
+            ev = explainer.expected_value
+            base_val = float(ev[0]) if isinstance(ev, (list, np.ndarray)) else float(ev)
 
     # ── Bar (mean |SHAP|) ──────────────────────────────────────────────────────
     if plot_type == "Bar (mean |SHAP|)":
