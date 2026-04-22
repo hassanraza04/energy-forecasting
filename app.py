@@ -33,6 +33,7 @@ from src import (
     page3_predictions,
     page4_shap,
     page5_tuning,
+    page6_conclusions,
 )
 
 # ── Global CSS ────────────────────────────────────────────────────────────────
@@ -53,6 +54,7 @@ PAGES = [
     "🤖 Model Predictions",
     "🔍 Explainability (SHAP)",
     "⚙️  Hyperparameter Tuning",
+    "🏁 Conclusions",
 ]
 
 with st.sidebar:
@@ -84,3 +86,7 @@ elif page == PAGES[3]:
 elif page == PAGES[4]:
     bundle = train_all_models(DATA_PATH)
     page5_tuning.render(bundle)
+
+elif page == PAGES[5]:
+    bundle = train_all_models(DATA_PATH)
+    page6_conclusions.render(bundle)
