@@ -88,7 +88,11 @@ def render(bundle: Dict[str, Any]) -> None:
             title=f"{model_choice} — Top {top_n} Feature Importances",
             template="plotly_dark",
         )
-        fig.update_layout(yaxis=dict(autorange="reversed"))
+        fig.update_layout(
+            yaxis=dict(autorange="reversed", dtick=1),
+            height=300 + (top_n * 25), # Dynamically adjust height to fit all labels
+            margin=dict(l=150),       # Add left margin for long feature names
+        )
         st.plotly_chart(fig, use_container_width=True)
 
     # ── Beeswarm ───────────────────────────────────────────────────────────────
