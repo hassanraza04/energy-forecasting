@@ -3,7 +3,7 @@ title: Energy Forecasting App
 emoji: ⚡
 colorFrom: blue
 colorTo: green
-sdk: gradio
+sdk: streamlit
 app_file: app.py
 pinned: false
 ---
