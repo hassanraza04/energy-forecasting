@@ -9,3 +9,4 @@ shap
 wandb
 joblib
 python-dotenv
+pytest
