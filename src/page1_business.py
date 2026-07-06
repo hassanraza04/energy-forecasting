@@ -1,73 +1,80 @@
-"""
-src/page1_business.py
-Page 1 — Business Case & Data
-"""
+"""Overview page for the energy forecasting app."""
 from __future__ import annotations
 
 import pandas as pd
 import streamlit as st
 
-from src.data_loader import TARGET_COL, DROP_COLS
+from src.content import APP_NAME, APP_TAGLINE
+from src.data_loader import DROP_COLS, TARGET_COL
 
 
 def render(df: pd.DataFrame) -> None:
-    st.title("⚡ Smart Energy Consumption Forecasting")
-    st.caption(
-        "Predicting appliance energy use to drive smarter, cost-efficient building management."
+    st.title(APP_NAME)
+    st.caption(APP_TAGLINE)
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Rows", f"{df.shape[0]:,}")
+    c2.metric("Columns", df.shape[1])
+    c3.metric("Target", TARGET_COL)
+    c4.metric("Missing cells", int(df.isna().sum().sum()))
+
+    st.divider()
+
+    st.subheader("What this app estimates")
+    st.write(
+        "This app estimates appliance energy use from indoor sensor readings, "
+        "outdoor weather, and time based features. It is built around the UCI "
+        "Appliances Energy Prediction dataset."
     )
 
-    # ── KPI strip ─────────────────────────────────────────────────────────────
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Total Rows",     f"{df.shape[0]:,}")
-    c2.metric("Total Columns",  df.shape[1])
-    c3.metric("Target Column",  TARGET_COL)
-    c4.metric("Missing Values", int(df.isna().sum().sum()))
+    left, right = st.columns([1.1, 1])
+    with left:
+        st.markdown("#### Modeling target")
+        st.write(
+            f"The target column is `{TARGET_COL}`, measured in watt-hours. "
+            "Each prediction is an estimate for appliance energy use under a "
+            "specific set of environmental conditions."
+        )
+        st.markdown("#### Excluded columns")
+        st.write(
+            "The model excludes the raw timestamp and random variables used in "
+            f"the source dataset: `{', '.join(DROP_COLS)}`."
+        )
 
-    st.markdown("---")
+    with right:
+        st.markdown("#### Feature groups")
+        st.write(
+            "- Indoor temperature and humidity readings\n"
+            "- Outdoor temperature, humidity, wind, and visibility\n"
+            "- Calendar features derived from the timestamp\n"
+            "- Lighting energy as a contextual input"
+        )
 
-    # ── Business problem ──────────────────────────────────────────────────────
-    st.subheader("🎯 Business Problem")
-    st.write("""
-    Buildings account for roughly **40%** of global energy consumption, with appliances being a
-    major contributor. This project builds a **regression model** that predicts appliance energy
-    consumption (Wh) using:
-    - 🌡️ Indoor temperature & humidity sensors (9 rooms)
-    - 🌤️ Outdoor weather indicators
-    - 🕐 Time-of-day and calendar features
+    st.divider()
 
-    **Business value:** facility managers can anticipate high-consumption periods, schedule
-    loads intelligently, reduce electricity bills, and lower CO₂ emissions.
-    """)
-
-    st.markdown("---")
-
-    # ── Column overview ───────────────────────────────────────────────────────
-    st.subheader("📋 Dataset Column Overview")
-
-    # Cast Mean uniformly to str to avoid Arrow mixed-type errors
-    mean_vals = [
-        str(round(float(df[c].mean()), 2))
-        if pd.api.types.is_numeric_dtype(df[c]) else "—"
-        for c in df.columns
+    st.subheader("Dataset columns")
+    mean_values = [
+        str(round(float(df[column].mean()), 2))
+        if pd.api.types.is_numeric_dtype(df[column]) else "Not numeric"
+        for column in df.columns
     ]
-    col_info = pd.DataFrame({
-        "Column":   list(df.columns),
-        "Dtype":    [str(df[c].dtype) for c in df.columns],
-        "Non-Null": [int(df[c].count()) for c in df.columns],
-        "Mean":     mean_vals,
+    column_info = pd.DataFrame({
+        "Column": list(df.columns),
+        "Type": [str(df[column].dtype) for column in df.columns],
+        "Non-null rows": [int(df[column].count()) for column in df.columns],
+        "Mean": mean_values,
     })
-    st.dataframe(col_info, width="stretch", height=350)
+    st.dataframe(column_info, width="stretch", height=350)
 
-    st.markdown("---")
+    st.divider()
 
-    # ── Tabs: preview + stats ─────────────────────────────────────────────────
-    tab_prev, tab_stats = st.tabs(["🔎 Data Preview", "📊 Descriptive Statistics"])
+    preview_tab, stats_tab = st.tabs(["Preview", "Summary statistics"])
 
-    with tab_prev:
-        n_rows = st.slider("Rows to preview", 5, 100, 10, 5, key="p1_preview_rows")
-        st.dataframe(df.head(n_rows), width="stretch")
+    with preview_tab:
+        row_count = st.slider("Rows to show", 5, 100, 10, 5, key="p1_preview_rows")
+        st.dataframe(df.head(row_count), width="stretch")
 
-    with tab_stats:
+    with stats_tab:
         st.dataframe(
             df.describe().T.style.background_gradient(cmap="Blues"),
             width="stretch",

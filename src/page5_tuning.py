@@ -1,276 +1,236 @@
-"""
-src/page5_tuning.py
-Page 5 — Hyperparameter Tuning & W&B Tracking — all 5 models
-W&B is a core graded requirement; this page makes it the centrepiece.
-"""
+"""Hyperparameter tuning and optional experiment tracking."""
 from __future__ import annotations
 
-from src.secrets import get_secret
-from typing import Dict, Any, List
+from typing import Any, Dict
 
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-
-from sklearn.linear_model import LinearRegression, Ridge, Lasso
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
+from sklearn.linear_model import Lasso, LinearRegression, Ridge
 from sklearn.model_selection import GridSearchCV
 
 from src.data_loader import ALL_MODELS, LINEAR_MODELS, RANDOM_STATE
+from src.secrets import get_secret
 
 
 def render(bundle: Dict[str, Any]) -> None:
-    st.title("⚙️ Hyperparameter Tuning & W&B Tracking")
-    st.caption(
-        "Run grid-search experiments on any model, track every run in "
-        "**Weights & Biases**, and select the best-performing configuration."
-    )
+    st.title("Tune Models")
+    st.caption("Run small grid searches and compare each result with the baseline models.")
 
-    results   = bundle["results"]
-    X_train   = bundle["X_train"]
-    X_train_s = bundle["X_train_s"]
-    y_train   = bundle["y_train"]
+    results = bundle["results"]
+    x_train = bundle["X_train"]
+    x_train_scaled = bundle["X_train_s"]
+    y_train = bundle["y_train"]
 
-    # ── Load credentials from .env (fallback to empty string) ─────────────────
-    _env_api_key = get_secret("WANDB_API_KEY")
-    _env_entity  = get_secret("WANDB_ENTITY")
-    _env_project = get_secret("WANDB_PROJECT", "energy-forecasting")
+    env_api_key = get_secret("WANDB_API_KEY")
+    env_entity = get_secret("WANDB_ENTITY")
+    env_project = get_secret("WANDB_PROJECT", "energy-forecasting")
 
-    # Auto-login with env key if available (silent, once per session)
-    if _env_api_key and "_wb_auto_logged_in" not in st.session_state:
+    if env_api_key and "_wb_auto_logged_in" not in st.session_state:
         try:
             import wandb
-            wandb.login(key=_env_api_key, relogin=False)
+            wandb.login(key=env_api_key, relogin=False)
             st.session_state["_wb_auto_logged_in"] = True
         except Exception:
             pass
 
-    # ── Internal W&B Configuration (HIDDEN) ───────────────────────────────────
-    # We use these variables for the logging loop below
-    use_wb     = bool(_env_api_key)
-    wb_project = _env_project or "energy-forecasting"
-    wb_entity  = _env_entity or None
-    wb_api_key = _env_api_key
+    use_wb = bool(env_api_key)
+    wb_project = env_project or "energy-forecasting"
+    wb_entity = env_entity or None
 
-    st.markdown("---")
-
-    # ══════════════════════════════════════════════════════════════════════════
-    # MODEL & GRID CONFIGURATION
-    # ══════════════════════════════════════════════════════════════════════════
-    st.subheader("🎛️ Experiment Configuration")
-
-    col_m, col_cv = st.columns([2, 1])
-    with col_m:
-        tune_model = st.selectbox("Select model to tune", ALL_MODELS, key="tune_model")
-    with col_cv:
+    st.subheader("Experiment setup")
+    model_col, cv_col = st.columns([2, 1])
+    with model_col:
+        tune_model = st.selectbox("Model to tune", ALL_MODELS, key="tune_model")
+    with cv_col:
         cv_folds = st.slider("Cross-validation folds", 2, 10, 3, key="tune_cv")
 
-    is_linear  = tune_model in LINEAR_MODELS
+    is_linear = tune_model in LINEAR_MODELS
     param_grid: Dict[str, Any] = {}
 
-    st.markdown(f"**Hyperparameter Grid — {tune_model}**")
-
+    st.markdown(f"#### Search grid for {tune_model}")
     with st.expander("Configure search grid", expanded=True):
-
         if tune_model == "Linear Regression":
-            st.info(
-                "Linear Regression has no free hyperparameters. "
-                "A single CV-scored run will be logged to W&B."
-            )
+            st.info("Linear Regression has no regularization settings in this app.")
             param_grid = {"fit_intercept": [True]}
 
         elif tune_model == "Ridge Regression":
             alphas = st.multiselect(
-                "alpha (regularisation strength)",
+                "Alpha",
                 [0.01, 0.1, 1.0, 10.0, 100.0],
                 default=[0.1, 1.0, 10.0],
                 key="tune_ridge_alpha",
-                help="Lower α → less regularisation; higher α → stronger regularisation.",
+                help="Lower alpha means weaker regularization.",
             )
             param_grid = {"alpha": alphas or [1.0]}
 
         elif tune_model == "Lasso Regression":
             alphas = st.multiselect(
-                "alpha (regularisation strength)",
+                "Alpha",
                 [0.001, 0.01, 0.1, 1.0, 10.0],
                 default=[0.01, 0.1, 1.0],
                 key="tune_lasso_alpha",
+                help="Higher alpha can shrink more coefficients toward zero.",
             )
             param_grid = {"alpha": alphas or [1.0]}
 
         elif tune_model == "Random Forest":
-            n_est = st.multiselect(
-                "n_estimators (number of trees)",
+            n_estimators = st.multiselect(
+                "Number of trees",
                 [50, 100, 200, 300],
                 default=[50, 100],
                 key="tune_rf_nest",
             )
-            m_dep = st.multiselect(
-                "max_depth (tree depth)",
+            max_depth = st.multiselect(
+                "Max depth",
                 [5, 10, 20, None],
                 default=[5, 10],
                 key="tune_rf_depth",
             )
             param_grid = {
-                "n_estimators": n_est or [100],
-                "max_depth":    m_dep or [10],
+                "n_estimators": n_estimators or [100],
+                "max_depth": max_depth or [10],
             }
 
         elif tune_model == "Gradient Boosting":
-            n_est = st.multiselect(
-                "n_estimators",
+            n_estimators = st.multiselect(
+                "Number of estimators",
                 [50, 100, 200],
                 default=[50, 100],
                 key="tune_gb_nest",
             )
-            lr = st.multiselect(
-                "learning_rate",
+            learning_rate = st.multiselect(
+                "Learning rate",
                 [0.01, 0.05, 0.1, 0.2],
                 default=[0.05, 0.1],
                 key="tune_gb_lr",
             )
-            m_dep = st.multiselect(
-                "max_depth",
+            max_depth = st.multiselect(
+                "Max depth",
                 [3, 5, 7],
                 default=[3, 5],
                 key="tune_gb_depth",
             )
             param_grid = {
-                "n_estimators":  n_est or [100],
-                "learning_rate": lr    or [0.1],
-                "max_depth":     m_dep or [3],
+                "n_estimators": n_estimators or [100],
+                "learning_rate": learning_rate or [0.1],
+                "max_depth": max_depth or [3],
             }
 
     total_configs = 1
-    for v in param_grid.values():
-        total_configs *= len(v)
+    for values in param_grid.values():
+        total_configs *= len(values)
     st.caption(
-        f"Grid will test **{total_configs} configuration(s)** × {cv_folds} folds "
-        f"= **{total_configs * cv_folds} model fits**."
+        f"The grid will test {total_configs} configuration(s) across {cv_folds} folds."
     )
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # RUN GRID SEARCH
-    # ══════════════════════════════════════════════════════════════════════════
-    if st.button("▶  Run Grid Search & Log to W&B", type="primary", key="tune_run"):
-
+    if st.button("Run grid search", type="primary", key="tune_run"):
         estimator_map = {
             "Linear Regression": LinearRegression(),
-            "Ridge Regression":  Ridge(max_iter=5000),
-            "Lasso Regression":  Lasso(max_iter=5000),
-            "Random Forest":     RandomForestRegressor(random_state=RANDOM_STATE, n_jobs=-1),
+            "Ridge Regression": Ridge(max_iter=5000),
+            "Lasso Regression": Lasso(max_iter=5000),
+            "Random Forest": RandomForestRegressor(random_state=RANDOM_STATE, n_jobs=-1),
             "Gradient Boosting": GradientBoostingRegressor(random_state=RANDOM_STATE),
         }
         estimator = estimator_map[tune_model]
-        Xtr       = X_train_s if is_linear else X_train
+        x_train_input = x_train_scaled if is_linear else x_train
 
         with st.spinner(
-            f"Running {cv_folds}-fold GridSearchCV for {tune_model} "
-            f"({total_configs} configs)…"
+            f"Running {cv_folds}-fold grid search for {tune_model}"
         ):
-            gs = GridSearchCV(
-                estimator, param_grid,
-                cv=cv_folds, scoring="r2",
-                n_jobs=-1, verbose=0,
+            grid_search = GridSearchCV(
+                estimator,
+                param_grid,
+                cv=cv_folds,
+                scoring="r2",
+                n_jobs=-1,
+                verbose=0,
                 return_train_score=True,
             )
-            gs.fit(Xtr, y_train)
+            grid_search.fit(x_train_input, y_train)
 
-        # ── Results ────────────────────────────────────────────────────────────
         st.success(
-            f"✅ Best params: **{gs.best_params_}**  |  "
-            f"CV R²: **{gs.best_score_:.4f}**"
+            f"Best parameters: {grid_search.best_params_}. "
+            f"CV R2: {grid_search.best_score_:.4f}"
         )
 
-        result_cols = [
-            "mean_test_score", "std_test_score",
-            "mean_train_score", "rank_test_score",
+        result_columns = [
+            "mean_test_score",
+            "std_test_score",
+            "mean_train_score",
+            "rank_test_score",
         ]
-        param_cols = [
-            c for c in pd.DataFrame(gs.cv_results_).columns
-            if c.startswith("param_")
+        param_columns = [
+            column for column in pd.DataFrame(grid_search.cv_results_).columns
+            if column.startswith("param_")
         ]
         cv_df = (
-            pd.DataFrame(gs.cv_results_)[param_cols + result_cols]
+            pd.DataFrame(grid_search.cv_results_)[param_columns + result_columns]
             .sort_values("rank_test_score")
             .reset_index(drop=True)
         )
-        cv_df.columns = [c.replace("param_", "") for c in cv_df.columns]
-        clean_param_cols = [c.replace("param_", "") for c in param_cols]
+        cv_df.columns = [column.replace("param_", "") for column in cv_df.columns]
+        clean_param_columns = [column.replace("param_", "") for column in param_columns]
 
         st.dataframe(
             cv_df.style
-                 .highlight_max(subset=["mean_test_score"], color="#064e3b")
-                 .highlight_min(subset=["std_test_score"],  color="#064e3b")
-                 .format({
-                     "mean_test_score":  "{:.4f}",
-                     "std_test_score":   "{:.4f}",
-                     "mean_train_score": "{:.4f}",
-                 }),
+            .highlight_max(subset=["mean_test_score"], color="#064e3b")
+            .highlight_min(subset=["std_test_score"], color="#064e3b")
+            .format({
+                "mean_test_score": "{:.4f}",
+                "std_test_score": "{:.4f}",
+                "mean_train_score": "{:.4f}",
+            }),
             width="stretch",
         )
 
-        # ── W&B Logging ────────────────────────────────────────────────────────
         if use_wb and wb_project:
             try:
                 import wandb
-                if wb_api_key:
-                    wandb.login(key=wb_api_key, relogin=False)
+                if env_api_key:
+                    wandb.login(key=env_api_key, relogin=False)
 
                 logged = 0
-                prog   = st.progress(0, text="Logging to W&B…")
-                for i, row in cv_df.iterrows():
-                    cfg = {p: row[p] for p in clean_param_cols}
-                    cfg["model"]    = tune_model
-                    cfg["cv_folds"] = cv_folds
+                progress = st.progress(0, text="Logging runs to W&B")
+                for index, row in cv_df.iterrows():
+                    config = {param: row[param] for param in clean_param_columns}
+                    config["model"] = tune_model
+                    config["cv_folds"] = cv_folds
 
-                    # Use .strip() and check for empty strings
                     final_entity = wb_entity.strip() if wb_entity else ""
-
-                    kwargs = dict(
-                        project=wb_project.strip() if wb_project else "energy-forecasting",
-                        name=f"{tune_model.replace(' ', '_')}_run_{i+1}",
-                        config=cfg,
-                        reinit=True,
-                    )
+                    kwargs = {
+                        "project": wb_project.strip() if wb_project else "energy-forecasting",
+                        "name": f"{tune_model.replace(' ', '_')}_run_{index + 1}",
+                        "config": config,
+                        "reinit": True,
+                    }
                     if final_entity:
                         kwargs["entity"] = final_entity
 
                     run = wandb.init(**kwargs)
                     wandb.log({
-                        "cv_r2_mean":    float(row["mean_test_score"]),
-                        "cv_r2_std":     float(row["std_test_score"]),
+                        "cv_r2_mean": float(row["mean_test_score"]),
+                        "cv_r2_std": float(row["std_test_score"]),
                         "train_r2_mean": float(row["mean_train_score"]),
-                        "rank":          int(row["rank_test_score"]),
+                        "rank": int(row["rank_test_score"]),
                     })
-                    # Tag best run
                     if int(row["rank_test_score"]) == 1:
                         wandb.run.tags = ["best"]
                     run.finish()
                     logged += 1
-                    prog.progress(logged / len(cv_df), text=f"Logged run {logged}/{len(cv_df)}")
+                    progress.progress(logged / len(cv_df), text=f"Logged {logged}/{len(cv_df)}")
 
-                prog.empty()
-
+                progress.empty()
                 entity_str = wb_entity if wb_entity else "<your-entity>"
-                run_url    = f"https://wandb.ai/{entity_str}/{wb_project}"
-                st.success(
-                    f"✅ Logged **{logged} runs** to W&B project "
-                    f"**{wb_project}**.  \n"
-                    f"[🔗 View in W&B dashboard]({run_url})"
-                )
-            except Exception as e:
-                st.error(f"W&B logging failed: {e}")
-                st.info(
-                    "Tip: make sure you've clicked **Login to W&B** above "
-                    "and your API key is correct."
-                )
-        elif not use_wb:
-            st.info("Enable W&B Logging above to track these experiments in wandb.ai.")
+                run_url = f"https://wandb.ai/{entity_str}/{wb_project}"
+                st.success(f"Logged {logged} run(s) to W&B: {run_url}")
+            except Exception as exc:
+                st.error(f"W&B logging failed: {exc}")
+        else:
+            st.info("Set W&B credentials to log tuning runs outside this app.")
 
-        # ── Visualisations ─────────────────────────────────────────────────────
-        st.subheader("📊 Results Visualisation")
-
+        st.subheader("Tuning results")
         sorted_cv = cv_df.sort_values("mean_test_score")
         fig = px.bar(
             sorted_cv,
@@ -280,13 +240,12 @@ def render(bundle: Dict[str, Any]) -> None:
             error_x="std_test_score",
             color="mean_test_score",
             color_continuous_scale="teal",
-            labels={"mean_test_score": "CV R²", "y": "Config"},
+            labels={"mean_test_score": "CV R2", "y": "Config"},
             template="plotly_dark",
-            title=f"{tune_model} — All configs ranked by CV R²",
+            title=f"{tune_model}: configurations ranked by CV R2",
         )
         st.plotly_chart(fig, use_container_width=True)
 
-        # Train vs test R² (overfitting check)
         fig2 = px.scatter(
             cv_df,
             x="mean_train_score",
@@ -295,66 +254,74 @@ def render(bundle: Dict[str, Any]) -> None:
             color="rank_test_score",
             color_continuous_scale="RdYlGn_r",
             labels={
-                "mean_train_score": "Train R²",
-                "mean_test_score":  "CV Test R²",
-                "rank_test_score":  "Rank",
+                "mean_train_score": "Train R2",
+                "mean_test_score": "CV test R2",
+                "rank_test_score": "Rank",
             },
-            title="Train vs CV R² (overfitting check) — closer to diagonal = better",
+            title="Train score vs CV score",
             template="plotly_dark",
         )
-        mn_val = min(cv_df["mean_train_score"].min(), cv_df["mean_test_score"].min()) - 0.02
-        mx_val = max(cv_df["mean_train_score"].max(), cv_df["mean_test_score"].max()) + 0.02
-        fig2.add_shape(type="line", x0=mn_val, y0=mn_val, x1=mx_val, y1=mx_val,
-                       line=dict(color="white", dash="dash"))
+        min_value = min(cv_df["mean_train_score"].min(), cv_df["mean_test_score"].min()) - 0.02
+        max_value = max(cv_df["mean_train_score"].max(), cv_df["mean_test_score"].max()) + 0.02
+        fig2.add_shape(
+            type="line",
+            x0=min_value,
+            y0=min_value,
+            x1=max_value,
+            y1=max_value,
+            line=dict(color="white", dash="dash"),
+        )
         st.plotly_chart(fig2, use_container_width=True)
 
-        # Heatmap for exactly 2 param dimensions
-        if len(clean_param_cols) == 2:
+        if len(clean_param_columns) == 2:
             try:
-                p1, p2 = clean_param_cols[0], clean_param_cols[1]
-                pivot  = cv_df.pivot_table(index=p1, columns=p2,
-                                            values="mean_test_score")
+                p1, p2 = clean_param_columns[0], clean_param_columns[1]
+                pivot = cv_df.pivot_table(index=p1, columns=p2, values="mean_test_score")
                 fig3 = px.imshow(
-                    pivot, text_auto=".3f",
+                    pivot,
+                    text_auto=".3f",
                     color_continuous_scale="Blues",
-                    labels={"color": "CV R²"},
-                    title=f"{tune_model} — Parameter Grid Heatmap",
+                    labels={"color": "CV R2"},
+                    title=f"{tune_model}: parameter grid",
                     template="plotly_dark",
                 )
                 st.plotly_chart(fig3, use_container_width=True)
             except Exception:
                 pass
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # BASELINE COMPARISON (always visible)
-    # ══════════════════════════════════════════════════════════════════════════
-    st.markdown("---")
-    st.subheader("📝 Baseline Performance — All Models (default hyperparameters)")
+    st.divider()
+    st.subheader("Baseline performance")
 
     metric_view = st.radio(
-        "Metric", ["R²", "MAE", "RMSE"], horizontal=True, key="tune_baseline_metric"
+        "Metric",
+        ["R2", "MAE", "RMSE"],
+        horizontal=True,
+        key="tune_baseline_metric",
     )
     base_df = pd.DataFrame([
-        {"Model": name, "MAE": v["MAE"], "RMSE": v["RMSE"], "R²": v["R2"]}
-        for name, v in results.items()
-    ]).sort_values(metric_view, ascending=(metric_view != "R²"))
+        {"Model": name, "MAE": values["MAE"], "RMSE": values["RMSE"], "R2": values["R2"]}
+        for name, values in results.items()
+    ]).sort_values(metric_view, ascending=(metric_view != "R2"))
 
-    # Highlight best
     best_model = base_df.iloc[0]["Model"]
-    st.info(f"🏆 Best baseline model: **{best_model}** "
-            f"(R²: {base_df.iloc[0]['R²']:.4f}, "
-            f"MAE: {base_df.iloc[0]['MAE']:.2f} Wh)")
+    st.info(
+        f"Best baseline model: {best_model}. "
+        f"R2: {base_df.iloc[0]['R2']:.4f}. "
+        f"MAE: {base_df.iloc[0]['MAE']:.2f} Wh."
+    )
 
     fig_b = px.bar(
-        base_df, x="Model", y=metric_view,
+        base_df,
+        x="Model",
+        y=metric_view,
         color=metric_view,
-        color_continuous_scale="teal" if metric_view == "R²" else "Reds",
-        template="plotly_dark", text_auto=".3f",
+        color_continuous_scale="teal" if metric_view == "R2" else "Reds",
+        template="plotly_dark",
+        text_auto=".3f",
     )
     fig_b.update_traces(textposition="outside")
     st.plotly_chart(fig_b, use_container_width=True)
 
     st.caption(
-        "Run the grid search above to compare tuned vs baseline performance. "
-        "All tuning runs are automatically logged to W&B when enabled."
+        "Run a grid search to compare tuned settings with the baseline model settings."
     )

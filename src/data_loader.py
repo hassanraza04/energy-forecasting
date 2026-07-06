@@ -1,7 +1,4 @@
-"""
-src/data_loader.py
-Constants, data helpers, and cached model-training for the Smart Energy app.
-"""
+"""Constants, data helpers, and cached model training."""
 from __future__ import annotations
 
 import os
@@ -20,16 +17,12 @@ from sklearn.preprocessing import StandardScaler
 
 warnings.filterwarnings("ignore")
 
-# ── Paths ─────────────────────────────────────────────────────────────────────
-# src/ is one level below the project root
 BASE_DIR  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_PATH = os.path.join(BASE_DIR, "energydata_complete.csv")
 
-# ── Column config ─────────────────────────────────────────────────────────────
 TARGET_COL   = "Appliances"
 DROP_COLS    = ["date", "rv1", "rv2"]
 
-# ── Model config ──────────────────────────────────────────────────────────────
 TEST_SIZE    = 0.2
 RANDOM_STATE = 42
 
@@ -43,8 +36,6 @@ ALL_MODELS    = [
 LINEAR_MODELS = {"Linear Regression", "Ridge Regression", "Lasso Regression"}
 TREE_MODELS   = {"Random Forest", "Gradient Boosting"}
 
-
-# ── Raw helpers (not cached — used by cached wrappers) ────────────────────────
 
 def _load_raw() -> Optional[pd.DataFrame]:
     """Read CSV; returns None if file is missing."""
@@ -77,9 +68,7 @@ def get_numeric_features(df: pd.DataFrame) -> List[str]:
     ]
 
 
-# ── Cached Streamlit resources ────────────────────────────────────────────────
-
-@st.cache_data(show_spinner="Loading dataset…")
+@st.cache_data(show_spinner="Loading dataset...")
 def get_data() -> pd.DataFrame:
     df = _load_raw()
     if df is None:
@@ -88,7 +77,7 @@ def get_data() -> pd.DataFrame:
     return _add_time_features(df)
 
 
-@st.cache_resource(show_spinner="Training all models — first load only…")
+@st.cache_resource(show_spinner="Training models on first load...")
 def train_all_models(_cache_key: str) -> Dict[str, Any]:
     """
     Train all 5 models and cache the full training bundle.

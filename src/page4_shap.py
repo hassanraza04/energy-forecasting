@@ -1,14 +1,11 @@
-"""
-src/page4_shap.py
-Page 4 — Explainability (SHAP) — all 5 models
-"""
+"""Model explanation views using SHAP."""
 from __future__ import annotations
 
-from typing import Dict, Any, List
+from typing import Any, Dict
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 import plotly.express as px
 import streamlit as st
 
@@ -16,136 +13,139 @@ from src.data_loader import ALL_MODELS, LINEAR_MODELS
 
 
 def render(bundle: Dict[str, Any]) -> None:
-    st.title("🔍 Model Explainability — SHAP")
-    st.info(
-        "SHAP (SHapley Additive exPlanations) values quantify each feature's contribution "
-        "to a model prediction. Supported for all 5 models."
-    )
+    st.title("Explain Model")
+    st.info("SHAP estimates how much each feature contributes to a model prediction.")
 
     try:
         import shap
     except ImportError:
-        st.error("Install shap:  `pip install shap`")
+        st.error("Install SHAP to use this page: `pip install shap`.")
         st.stop()
 
-    trained   = bundle["trained"]
-    X_train   = bundle["X_train"]
-    X_test    = bundle["X_test"]
-    X_train_s = bundle["X_train_s"]
-    X_test_s  = bundle["X_test_s"]
-    feat_cols = bundle["feat_cols"]
+    trained = bundle["trained"]
+    x_train = bundle["X_train"]
+    x_test = bundle["X_test"]
+    x_train_scaled = bundle["X_train_s"]
+    x_test_scaled = bundle["X_test_s"]
+    feature_columns = bundle["feat_cols"]
 
-    # ── Controls ───────────────────────────────────────────────────────────────
     c1, c2, c3 = st.columns(3)
     with c1:
         model_choice = st.selectbox("Model", ALL_MODELS, key="shap_model")
     with c2:
-        n_explain = st.slider("Samples to explain", 50, 300, 100, 25, key="shap_n")
+        sample_count = st.slider("Samples to explain", 50, 300, 100, 25, key="shap_n")
     with c3:
         plot_type = st.selectbox(
             "Plot type",
-            ["Bar (mean |SHAP|)", "Beeswarm", "Waterfall"],
+            ["Mean impact", "Beeswarm", "Waterfall"],
             key="shap_plot",
         )
 
     is_linear = model_choice in LINEAR_MODELS
-    model     = trained[model_choice]
+    model = trained[model_choice]
 
-    with st.spinner(f"Computing SHAP values for {model_choice}…"):
+    with st.spinner(f"Computing SHAP values for {model_choice}"):
         if is_linear:
-            # LinearExplainer uses training data as the background distribution
-            X_bg  = X_train_s[:200]
-            X_exp = X_test_s[:n_explain]
-            explainer = shap.LinearExplainer(model, X_bg)
-            shap_vals = explainer.shap_values(X_exp)
-            X_df      = pd.DataFrame(X_exp, columns=feat_cols)
-            
-            # Safe conversion of expected_value (can be array or list in some SHAP versions)
-            ev = explainer.expected_value
-            base_val = float(ev[0]) if isinstance(ev, (list, np.ndarray)) else float(ev)
+            x_background = x_train_scaled[:200]
+            x_explain = x_test_scaled[:sample_count]
+            explainer = shap.LinearExplainer(model, x_background)
+            shap_values = explainer.shap_values(x_explain)
+            x_df = pd.DataFrame(x_explain, columns=feature_columns)
+            expected_value = explainer.expected_value
         else:
-            # TreeExplainer — no background needed
-            X_exp = X_test.values[:n_explain]
+            x_explain = x_test.values[:sample_count]
             explainer = shap.TreeExplainer(model)
-            shap_vals = explainer.shap_values(X_exp)
-            X_df      = pd.DataFrame(X_exp, columns=feat_cols)
-            
-            # Safe conversion of expected_value
-            ev = explainer.expected_value
-            base_val = float(ev[0]) if isinstance(ev, (list, np.ndarray)) else float(ev)
+            shap_values = explainer.shap_values(x_explain)
+            x_df = pd.DataFrame(x_explain, columns=feature_columns)
+            expected_value = explainer.expected_value
 
-    # ── Bar (mean |SHAP|) ──────────────────────────────────────────────────────
-    if plot_type == "Bar (mean |SHAP|)":
-        top_n     = st.slider("Top N features", 5, len(feat_cols), 20, key="shap_topn")
-        shap_df   = pd.DataFrame(np.abs(shap_vals), columns=feat_cols)
+        base_value = (
+            float(expected_value[0])
+            if isinstance(expected_value, (list, np.ndarray))
+            else float(expected_value)
+        )
+
+    if plot_type == "Mean impact":
+        top_n = st.slider("Top features", 5, len(feature_columns), 20, key="shap_topn")
+        shap_df = pd.DataFrame(np.abs(shap_values), columns=feature_columns)
         mean_shap = shap_df.mean().sort_values(ascending=False).head(top_n)
 
         fig = px.bar(
-            x=mean_shap.values, y=mean_shap.index,
-            orientation="h", color=mean_shap.values,
+            x=mean_shap.values,
+            y=mean_shap.index,
+            orientation="h",
+            color=mean_shap.values,
             color_continuous_scale="Blues",
-            labels={"x": "Mean |SHAP value|", "y": "Feature"},
-            title=f"{model_choice} — Top {top_n} Feature Importances",
+            labels={"x": "Mean absolute SHAP value", "y": "Feature"},
+            title=f"{model_choice}: top feature impact",
             template="plotly_dark",
         )
         fig.update_layout(
             yaxis=dict(autorange="reversed", dtick=1),
-            height=300 + (top_n * 25), # Dynamically adjust height to fit all labels
-            margin=dict(l=150),       # Add left margin for long feature names
+            height=300 + (top_n * 25),
+            margin=dict(l=150),
         )
         st.plotly_chart(fig, use_container_width=True)
 
-    # ── Beeswarm ───────────────────────────────────────────────────────────────
     elif plot_type == "Beeswarm":
-        max_disp = st.slider("Max features displayed", 5, 25, 15, key="shap_beeswarm_n")
+        max_display = st.slider("Max features displayed", 5, 25, 15, key="shap_beeswarm_n")
         fig2, _ = plt.subplots(figsize=(10, 7))
         fig2.patch.set_facecolor("#0f172a")
         shap.summary_plot(
-            shap_vals, X_df,
-            plot_type="dot", show=False, max_display=max_disp,
+            shap_values,
+            x_df,
+            plot_type="dot",
+            show=False,
+            max_display=max_display,
         )
         plt.tight_layout()
         st.pyplot(fig2)
 
-    # ── Waterfall ──────────────────────────────────────────────────────────────
     elif plot_type == "Waterfall":
-        idx = st.slider("Test-set sample index", 0, n_explain - 1, 0, key="shap_idx")
-        exp = shap.Explanation(
-            values=shap_vals[int(idx)],
-            base_values=base_val,
-            data=X_df.iloc[int(idx)].values,
-            feature_names=feat_cols,
+        sample_index = st.slider(
+            "Test sample index",
+            0,
+            sample_count - 1,
+            0,
+            key="shap_idx",
+        )
+        explanation = shap.Explanation(
+            values=shap_values[int(sample_index)],
+            base_values=base_value,
+            data=x_df.iloc[int(sample_index)].values,
+            feature_names=feature_columns,
         )
         fig3, _ = plt.subplots(figsize=(10, 6))
         fig3.patch.set_facecolor("#0f172a")
-        shap.plots.waterfall(exp, show=False)
+        shap.plots.waterfall(explanation, show=False)
         plt.tight_layout()
         st.pyplot(fig3)
 
-    # ── Bonus: top feature dependency plot ─────────────────────────────────────
-    st.markdown("---")
-    st.subheader("📈 SHAP Dependency — Top Feature")
-    shap_df   = pd.DataFrame(np.abs(shap_vals), columns=feat_cols)
-    top_feat  = shap_df.mean().idxmax()
-    feat_idx  = feat_cols.index(top_feat)
-    shap_sign = shap_vals[:, feat_idx]
-    feat_vals = X_df[top_feat].values
+    st.divider()
+    st.subheader("Top feature dependency")
+    shap_df = pd.DataFrame(np.abs(shap_values), columns=feature_columns)
+    top_feature = shap_df.mean().idxmax()
+    feature_index = feature_columns.index(top_feature)
+    shap_sign = shap_values[:, feature_index]
+    feature_values = x_df[top_feature].values
 
-    interaction_col = st.selectbox(
-        "Colour interaction by",
-        [f for f in feat_cols if f != top_feat],
+    interaction_column = st.selectbox(
+        "Color by",
+        [feature for feature in feature_columns if feature != top_feature],
         key="shap_dep_color",
     )
-    color_vals = X_df[interaction_col].values
+    color_values = x_df[interaction_column].values
 
     fig4 = px.scatter(
-        x=feat_vals, y=shap_sign,
-        color=color_vals,
+        x=feature_values,
+        y=shap_sign,
+        color=color_values,
         color_continuous_scale="RdBu",
-        color_continuous_midpoint=float(np.median(color_vals)),
-        opacity=0.7, template="plotly_dark",
-        labels={"x": top_feat, "y": "SHAP value", "color": interaction_col},
-        title=f"SHAP dependency for top feature: {top_feat}",
+        color_continuous_midpoint=float(np.median(color_values)),
+        opacity=0.7,
+        template="plotly_dark",
+        labels={"x": top_feature, "y": "SHAP value", "color": interaction_column},
+        title=f"Dependency for top feature: {top_feature}",
     )
     fig4.add_hline(y=0, line_dash="dot", line_color="white")
     st.plotly_chart(fig4, use_container_width=True)
