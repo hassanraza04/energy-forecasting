@@ -15,7 +15,6 @@ from src.content import (
     PAGE_FORECAST,
     PAGE_OPTIONS,
     PAGE_OVERVIEW,
-    PAGE_TUNE,
 )
 
 st.set_page_config(
@@ -24,18 +23,13 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-from src.data_loader import (
-    get_data,
-    train_all_models,
-    get_numeric_features,
-    DATA_PATH,
-)
+from src.artifacts import get_model_bundle
+from src.data_loader import get_data, get_numeric_features
 from src import (
     page1_business,
     page2_eda,
     page3_predictions,
     page4_shap,
-    page5_tuning,
     page6_conclusions,
 )
 
@@ -86,17 +80,13 @@ elif page == PAGE_EXPLORE:
     page2_eda.render(df, num_cols)
 
 elif page == PAGE_FORECAST:
-    bundle = train_all_models(DATA_PATH)
+    bundle = get_model_bundle()
     page3_predictions.render(bundle)
 
 elif page == PAGE_EXPLAIN:
-    bundle = train_all_models(DATA_PATH)
+    bundle = get_model_bundle()
     page4_shap.render(bundle)
 
-elif page == PAGE_TUNE:
-    bundle = train_all_models(DATA_PATH)
-    page5_tuning.render(bundle)
-
 elif page == PAGE_FINDINGS:
-    bundle = train_all_models(DATA_PATH)
+    bundle = get_model_bundle()
     page6_conclusions.render(bundle)

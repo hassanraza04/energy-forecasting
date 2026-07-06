@@ -9,7 +9,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from src.data_loader import ALL_MODELS, LINEAR_MODELS
+from src.data_loader import LINEAR_MODELS
 
 
 def render(bundle: Dict[str, Any]) -> None:
@@ -29,9 +29,11 @@ def render(bundle: Dict[str, Any]) -> None:
     x_test_scaled = bundle["X_test_s"]
     feature_columns = bundle["feat_cols"]
 
+    model_names = list(trained.keys())
+
     c1, c2, c3 = st.columns(3)
     with c1:
-        model_choice = st.selectbox("Model", ALL_MODELS, key="shap_model")
+        model_choice = st.selectbox("Saved model", model_names, key="shap_model")
     with c2:
         sample_count = st.slider("Samples to explain", 50, 300, 100, 25, key="shap_n")
     with c3:
@@ -85,7 +87,7 @@ def render(bundle: Dict[str, Any]) -> None:
             height=300 + (top_n * 25),
             margin=dict(l=150),
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     elif plot_type == "Beeswarm":
         max_display = st.slider("Max features displayed", 5, 25, 15, key="shap_beeswarm_n")
@@ -148,4 +150,4 @@ def render(bundle: Dict[str, Any]) -> None:
         title=f"Dependency for top feature: {top_feature}",
     )
     fig4.add_hline(y=0, line_dash="dot", line_color="white")
-    st.plotly_chart(fig4, use_container_width=True)
+    st.plotly_chart(fig4, width="stretch")

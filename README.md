@@ -23,7 +23,7 @@ The app uses the UCI Appliances Energy Prediction dataset to train and compare f
 - Random Forest
 - Gradient Boosting
 
-The app includes data exploration, live forecasting, model comparison, SHAP based explanations, small grid search experiments, and a short findings page.
+The app includes data exploration, live forecasting, model comparison, SHAP based explanations, and a short findings page.
 
 ## Main Features
 
@@ -32,7 +32,7 @@ The app includes data exploration, live forecasting, model comparison, SHAP base
 - Forecast form for testing one set of conditions across trained models
 - Model ranking by R2, MAE, and RMSE
 - SHAP charts for feature impact and single prediction explanations
-- Optional Weights & Biases logging for tuning runs
+- Saved model artifacts so the public app does not retrain on boot
 - Clear notes on model limits before real operational use
 
 ## Local Setup
@@ -62,17 +62,17 @@ Run tests:
 pytest -v
 ```
 
-## Environment Variables
+## Training Artifacts
 
-Weights & Biases logging is optional. Set these values only if you want tuning runs logged outside the app:
+The public app loads saved model artifacts from `artifacts/model_bundle.joblib`.
 
-```env
-WANDB_API_KEY=your_key_here
-WANDB_ENTITY=your_entity_here
-WANDB_PROJECT=energy-forecasting
+To rebuild the artifacts after changing the dataset or model candidates, run:
+
+```bash
+python scripts/train_artifacts.py
 ```
 
-The app still runs without these values.
+The script tests a small set of sensible parameters offline, saves the best model from each family, and marks the strongest overall model in the bundle.
 
 ## Project Structure
 
@@ -90,9 +90,10 @@ The app still runs without these values.
 │   ├── page2_eda.py
 │   ├── page3_predictions.py
 │   ├── page4_shap.py
-│   ├── page5_tuning.py
 │   ├── page6_conclusions.py
 │   └── secrets.py
+├── scripts
+│   └── train_artifacts.py
 └── tests
     ├── conftest.py
     ├── test_modeling.py

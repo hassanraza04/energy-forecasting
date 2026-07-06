@@ -9,9 +9,13 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from src.data_loader import ALL_MODELS, LINEAR_MODELS, TARGET_COL, get_data
+from src.data_loader import LINEAR_MODELS
 from src.modeling import build_leaderboard
-from src.prediction import build_prediction_vector, clip_energy_prediction
+from src.prediction import (
+    build_prediction_vector,
+    clip_energy_prediction,
+    describe_prediction,
+)
 
 
 FORM_FEATURES = {
@@ -45,17 +49,18 @@ def _predict_for_model(
 
 def render(bundle: Dict[str, Any]) -> None:
     st.title("Forecast")
-    st.caption("Test one set of conditions across the trained regression models.")
+    st.caption("Run fast predictions with models trained offline and loaded from saved artifacts.")
 
     results = bundle["results"]
     feature_columns = bundle["feat_cols"]
     trained = bundle["trained"]
     scaler = bundle["scaler"]
+    best_model = bundle.get("best_model", "Random Forest")
     leaderboard = build_leaderboard(results)
 
     view = st.radio(
         "View",
-        ["Live forecast", "Model ranking", "Inspect model", "Compare models"],
+        ["Live forecast", "Model ranking", "Inspect saved model"],
         horizontal=True,
         key="pred_view",
     )
@@ -64,16 +69,11 @@ def render(bundle: Dict[str, Any]) -> None:
     if view == "Live forecast":
         st.subheader("Live forecast")
         st.write(
-            "Adjust the conditions below. Features not shown in the form are filled "
-            "with their dataset averages."
+            "Adjust the conditions below. The app builds one input row and sends it "
+            "through the saved model. It does not retrain on this page."
         )
 
-        df_raw = get_data()
-        feature_means = {
-            column: float(df_raw[column].mean())
-            for column in feature_columns
-            if column in df_raw.columns and pd.api.types.is_numeric_dtype(df_raw[column])
-        }
+        feature_means = bundle["feature_means"]
 
         with st.form("prediction_form"):
             st.markdown("#### Conditions")
@@ -105,14 +105,13 @@ def render(bundle: Dict[str, Any]) -> None:
                                 key=f"live_{feature}",
                             )
 
-            model_col, _ = st.columns([1, 2])
-            with model_col:
-                live_model = st.selectbox("Model", ALL_MODELS, key="live_model_select")
+            live_model = best_model
+            st.caption(f"Using saved production model: {live_model}")
 
             submitted = st.form_submit_button(
                 "Run forecast",
                 type="primary",
-                use_container_width=True,
+                width="stretch",
             )
 
         if submitted:
@@ -120,9 +119,10 @@ def render(bundle: Dict[str, Any]) -> None:
             prediction = _predict_for_model(live_model, input_vector, trained, scaler)
 
             st.divider()
-            average_energy = float(df_raw[TARGET_COL].mean())
+            average_energy = float(bundle["target_average"])
             delta_pct = (prediction - average_energy) / average_energy * 100
             delta_label = f"{delta_pct:+.1f}% vs dataset average"
+            description = describe_prediction(prediction, average_energy)
 
             res_col1, res_col2, res_col3 = st.columns(3)
             res_col1.metric(
@@ -134,6 +134,9 @@ def render(bundle: Dict[str, Any]) -> None:
             res_col2.metric("Dataset average", f"{average_energy:.1f} Wh")
             res_col3.metric("Model R2", f"{results[live_model]['R2']:.4f}")
 
+            st.markdown(f"#### {description['level']}")
+            st.write(description["message"])
+
             fig_gauge = go.Figure(go.Indicator(
                 mode="gauge+number+delta",
                 value=prediction,
@@ -141,7 +144,7 @@ def render(bundle: Dict[str, Any]) -> None:
                 title={"text": "Predicted appliance energy", "font": {"color": "#e2e8f0"}},
                 gauge={
                     "axis": {
-                        "range": [0, float(df_raw[TARGET_COL].quantile(0.99))],
+                        "range": [0, float(bundle["target_q99"])],
                         "tickcolor": "#e2e8f0",
                     },
                     "bar": {"color": "#38bdf8"},
@@ -154,7 +157,7 @@ def render(bundle: Dict[str, Any]) -> None:
                         {
                             "range": [
                                 average_energy * 1.25,
-                                float(df_raw[TARGET_COL].quantile(0.99)),
+                                float(bundle["target_q99"]),
                             ],
                             "color": "#7f1d1d",
                         },
@@ -172,51 +175,20 @@ def render(bundle: Dict[str, Any]) -> None:
                 font={"color": "#e2e8f0"},
                 height=320,
             )
-            st.plotly_chart(fig_gauge, use_container_width=True)
-
-            if prediction < average_energy * 0.75:
-                st.success("This estimate is below the dataset average.")
-            elif prediction < average_energy * 1.25:
-                st.info("This estimate is close to the dataset average.")
-            else:
-                st.warning("This estimate is above the dataset average.")
+            st.plotly_chart(fig_gauge, width="stretch")
 
             st.divider()
-            st.subheader("Same input across all models")
-            all_predictions = [
-                {
-                    "Model": model_name,
-                    "Predicted energy (Wh)": _predict_for_model(
-                        model_name,
-                        input_vector,
-                        trained,
-                        scaler,
-                    ),
-                }
-                for model_name in ALL_MODELS
-            ]
-            prediction_df = pd.DataFrame(all_predictions)
-            fig_all = px.bar(
-                prediction_df,
-                x="Model",
-                y="Predicted energy (Wh)",
-                color="Predicted energy (Wh)",
-                color_continuous_scale="Blues",
-                template="plotly_dark",
-                text_auto=".1f",
-                title="Forecast by model",
+            st.subheader("Why the result changed")
+            st.write(
+                "Each slider value becomes one feature in the input row. The saved model "
+                "uses the relationships learned during offline training to estimate the "
+                "target value for that row."
             )
-            fig_all.add_hline(
-                y=average_energy,
-                line_dash="dash",
-                line_color="#38bdf8",
-                annotation_text=f"Dataset average: {average_energy:.0f} Wh",
-                annotation_font_color="#38bdf8",
-            )
-            fig_all.update_traces(textposition="outside")
-            st.plotly_chart(fig_all, use_container_width=True)
 
     elif view == "Model ranking":
+        st.write(
+            "These scores were calculated during offline training and saved with the model bundle."
+        )
         sort_by = st.selectbox("Sort by", ["R2", "MAE", "RMSE"], key="lb_sort")
         ascending = sort_by in ["MAE", "RMSE"]
         ranked = leaderboard.sort_values(sort_by, ascending=ascending).reset_index(drop=True)
@@ -241,10 +213,15 @@ def render(bundle: Dict[str, Any]) -> None:
             text_auto=".3f",
         )
         fig.update_traces(textposition="outside")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
-    elif view == "Inspect model":
-        chosen = st.selectbox("Model to inspect", ALL_MODELS, key="ins_model")
+    elif view == "Inspect saved model":
+        chosen = st.selectbox(
+            "Model to inspect",
+            list(trained.keys()),
+            index=0,
+            key="ins_model",
+        )
         result = results[chosen]
         y_true = result["y_test"]
         y_pred = result["preds"]
@@ -285,7 +262,7 @@ def render(bundle: Dict[str, Any]) -> None:
                 y1=maximum,
                 line=dict(color="#e2e8f0", dash="dash"),
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
         with residual_tab:
             residuals = y_true - y_pred
@@ -299,7 +276,7 @@ def render(bundle: Dict[str, Any]) -> None:
                     color_discrete_sequence=["#38bdf8"],
                     template="plotly_dark",
                 )
-                st.plotly_chart(fig2, use_container_width=True)
+                st.plotly_chart(fig2, width="stretch")
             with col2:
                 fig3 = px.scatter(
                     x=y_pred,
@@ -310,7 +287,7 @@ def render(bundle: Dict[str, Any]) -> None:
                     template="plotly_dark",
                 )
                 fig3.add_hline(y=0, line_dash="dash", line_color="white")
-                st.plotly_chart(fig3, use_container_width=True)
+                st.plotly_chart(fig3, width="stretch")
 
         with error_tab:
             abs_error = np.abs(y_true - y_pred)
@@ -328,58 +305,4 @@ def render(bundle: Dict[str, Any]) -> None:
                 template="plotly_dark",
                 title="Percentage error distribution",
             )
-            st.plotly_chart(fig4, use_container_width=True)
-
-    elif view == "Compare models":
-        selected = st.multiselect(
-            "Models to compare",
-            ALL_MODELS,
-            default=ALL_MODELS,
-            key="comp_models",
-        )
-        if not selected:
-            st.warning("Select at least one model.")
-            return
-
-        metric = st.radio("Metric", ["R2", "MAE", "RMSE"], horizontal=True, key="comp_metric")
-        selected_leaderboard = leaderboard[leaderboard["Model"].isin(selected)]
-        sorted_leaderboard = selected_leaderboard.sort_values(
-            metric,
-            ascending=(metric != "R2"),
-        )
-
-        fig = px.bar(
-            sorted_leaderboard,
-            x="Model",
-            y=metric,
-            color="Model",
-            template="plotly_dark",
-            text_auto=".3f",
-        )
-        fig.update_traces(textposition="outside")
-        st.plotly_chart(fig, use_container_width=True)
-
-        st.subheader("Prediction overlay")
-        palette = ["#38bdf8", "#f472b6", "#a78bfa", "#34d399", "#fbbf24"]
-        fig2 = go.Figure()
-        fig2.add_trace(go.Scatter(
-            x=list(range(300)),
-            y=results[selected[0]]["y_test"][:300].tolist(),
-            mode="lines",
-            name="Actual",
-            line=dict(color="white", width=1.5),
-        ))
-        for index, model_name in enumerate(selected):
-            fig2.add_trace(go.Scatter(
-                x=list(range(300)),
-                y=results[model_name]["preds"][:300].tolist(),
-                mode="lines",
-                name=model_name,
-                line=dict(color=palette[index % len(palette)], width=1),
-            ))
-        fig2.update_layout(
-            template="plotly_dark",
-            xaxis_title="Test sample index",
-            yaxis_title="Energy (Wh)",
-        )
-        st.plotly_chart(fig2, use_container_width=True)
+            st.plotly_chart(fig4, width="stretch")

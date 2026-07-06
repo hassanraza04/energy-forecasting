@@ -46,7 +46,7 @@ def render(df: pd.DataFrame, num_cols: List[str]) -> None:
                 log_y=log_y,
             )
             fig.update_layout(bargap=0.03)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
         if pd.api.types.is_numeric_dtype(df[selected_feature]):
             summary = df[selected_feature].describe()
@@ -85,7 +85,7 @@ def render(df: pd.DataFrame, num_cols: List[str]) -> None:
             template="plotly_dark",
         )
         fig.update_traces(line=dict(width=1.2))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
         if st.checkbox("Show rolling average", True, key="ts_rolling_toggle"):
             window = st.slider("Rolling window", 2, 48, 12, key="ts_window")
@@ -110,7 +110,7 @@ def render(df: pd.DataFrame, num_cols: List[str]) -> None:
                 xaxis_title="Time",
                 yaxis_title=feature,
             )
-            st.plotly_chart(fig2, use_container_width=True)
+            st.plotly_chart(fig2, width="stretch")
 
     elif chart_type == "Time period":
         st.subheader("Average by time period")
@@ -149,7 +149,7 @@ def render(df: pd.DataFrame, num_cols: List[str]) -> None:
             text_auto=".0f",
         )
         fig.update_traces(textposition="outside")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     elif chart_type == "Scatter":
         st.subheader("Feature relationship")
@@ -184,7 +184,7 @@ def render(df: pd.DataFrame, num_cols: List[str]) -> None:
             labels={x_feature: x_feature, y_feature: y_feature},
             template="plotly_dark",
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
         if st.checkbox("Add OLS trend line", key="sc_ols"):
             fig2 = px.scatter(
@@ -198,7 +198,7 @@ def render(df: pd.DataFrame, num_cols: List[str]) -> None:
                 color_continuous_scale="Viridis",
                 template="plotly_dark",
             )
-            st.plotly_chart(fig2, use_container_width=True)
+            st.plotly_chart(fig2, width="stretch")
 
     elif chart_type == "Correlation":
         st.subheader("Correlation matrix")
@@ -249,4 +249,4 @@ def render(df: pd.DataFrame, num_cols: List[str]) -> None:
             labels={"x": f"{method.title()} r", "y": "Feature"},
             template="plotly_dark",
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")

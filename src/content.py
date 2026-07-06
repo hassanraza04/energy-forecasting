@@ -5,7 +5,6 @@ PAGE_OVERVIEW = "Overview"
 PAGE_EXPLORE = "Explore Data"
 PAGE_FORECAST = "Forecast"
 PAGE_EXPLAIN = "Explain Model"
-PAGE_TUNE = "Tune Models"
 PAGE_FINDINGS = "Findings"
 
 PAGE_OPTIONS = [
@@ -13,7 +12,6 @@ PAGE_OPTIONS = [
     PAGE_EXPLORE,
     PAGE_FORECAST,
     PAGE_EXPLAIN,
-    PAGE_TUNE,
     PAGE_FINDINGS,
 ]
 
@@ -22,6 +20,5 @@ PAGE_TITLES = {
     PAGE_EXPLORE: "Explore Data",
     PAGE_FORECAST: "Forecast",
     PAGE_EXPLAIN: "Explain Model",
-    PAGE_TUNE: "Tune Models",
     PAGE_FINDINGS: "Findings",
 }

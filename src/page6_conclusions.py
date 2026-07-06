@@ -12,7 +12,7 @@ from src.modeling import build_leaderboard, get_best_model
 
 def render(bundle: Dict[str, Any]) -> None:
     st.title("Findings")
-    st.caption("A short summary of model performance, patterns, and limits.")
+    st.caption("A short summary of saved model performance, patterns, and limits.")
 
     results = bundle["results"]
     leaderboard = build_leaderboard(results)
@@ -23,11 +23,14 @@ def render(bundle: Dict[str, Any]) -> None:
     c2.metric("Best R2", f"{best['R2']:.4f}")
     c3.metric("Mean abs error", f"{best['MAE']:.2f} Wh")
 
+    params = bundle.get("metadata", {}).get("selected_params", {}).get(best["Model"], {})
     st.write(
-        f"The strongest baseline model in this run is {best['Model']}. "
-        f"It reaches an R2 score of {best['R2']:.4f} with a mean absolute "
-        f"error of {best['MAE']:.2f} Wh on the held out test set."
+        f"The strongest saved model is {best['Model']}. It reaches an R2 score "
+        f"of {best['R2']:.4f} with a mean absolute error of {best['MAE']:.2f} Wh "
+        "on the held out test set."
     )
+    if params:
+        st.write(f"Selected parameters: `{params}`")
 
     st.divider()
 
@@ -59,8 +62,8 @@ def render(bundle: Dict[str, Any]) -> None:
 
     with st.expander("Model checks"):
         st.write(
-            "Compare the baseline models with more recent data, track drift over time, "
-            "and retrain when usage patterns or seasons change."
+            "Retrain offline with newer data, compare candidate parameters, and update "
+            "the saved artifact only after the new model performs better."
         )
 
     with st.expander("Deployment checks"):
@@ -83,4 +86,4 @@ def render(bundle: Dict[str, Any]) -> None:
         range_x=[0, 1],
     )
     fig.update_layout(height=300, showlegend=False)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")

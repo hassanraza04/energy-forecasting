@@ -2,20 +2,10 @@
 from __future__ import annotations
 
 import os
-import warnings
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 
-import numpy as np
 import pandas as pd
 import streamlit as st
-
-from sklearn.linear_model import LinearRegression, Ridge, Lasso
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-from sklearn.preprocessing import StandardScaler
-
-warnings.filterwarnings("ignore")
 
 BASE_DIR  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_PATH = os.path.join(BASE_DIR, "energydata_complete.csv")
@@ -75,69 +65,3 @@ def get_data() -> pd.DataFrame:
         st.error("Dataset not found. Place `energydata_complete.csv` next to `app.py`.")
         st.stop()
     return _add_time_features(df)
-
-
-@st.cache_resource(show_spinner="Training models on first load...")
-def train_all_models(_cache_key: str) -> Dict[str, Any]:
-    """
-    Train all 5 models and cache the full training bundle.
-    _cache_key (DATA_PATH) prevents re-hashing large DataFrames.
-    """
-    df        = get_data()
-    feat_cols = get_numeric_features(df)
-    X = df[feat_cols]
-    y = df[TARGET_COL]
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE
-    )
-
-    scaler    = StandardScaler()
-    X_train_s = scaler.fit_transform(X_train)
-    X_test_s  = scaler.transform(X_test)
-
-    definitions = {
-        "Linear Regression": LinearRegression(),
-        "Ridge Regression":  Ridge(alpha=1.0),
-        "Lasso Regression":  Lasso(alpha=1.0, max_iter=5000),
-        "Random Forest":     RandomForestRegressor(
-                                 n_estimators=100,
-                                 random_state=RANDOM_STATE,
-                                 n_jobs=-1,
-                             ),
-        "Gradient Boosting": GradientBoostingRegressor(
-                                 n_estimators=100,
-                                 random_state=RANDOM_STATE,
-                             ),
-    }
-
-    results: Dict[str, Any] = {}
-    trained: Dict[str, Any] = {}
-
-    for name, model in definitions.items():
-        is_linear = name in LINEAR_MODELS
-        Xtr = X_train_s if is_linear else X_train.values
-        Xte = X_test_s  if is_linear else X_test.values
-        model.fit(Xtr, y_train)
-        preds = model.predict(Xte)
-        results[name] = {
-            "MAE":    float(mean_absolute_error(y_test, preds)),
-            "RMSE":   float(mean_squared_error(y_test, preds) ** 0.5),
-            "R2":     float(r2_score(y_test, preds)),
-            "preds":  preds,
-            "y_test": y_test.values,
-        }
-        trained[name] = model
-
-    return {
-        "results":    results,
-        "trained":    trained,
-        "X_train":    X_train,
-        "X_test":     X_test,
-        "X_train_s":  X_train_s,
-        "X_test_s":   X_test_s,
-        "y_train":    y_train,
-        "y_test":     y_test,
-        "scaler":     scaler,
-        "feat_cols":  feat_cols,
-    }
