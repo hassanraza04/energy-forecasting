@@ -1,48 +1,32 @@
 ---
-title: Energy Forecasting Lab
-colorFrom: blue
-colorTo: cyan
-sdk: streamlit
-app_file: app.py
+title: Home Energy Estimator
+sdk: docker
+app_port: 7860
 pinned: false
 ---
 
-# Energy Forecasting Lab
+# Home Energy Estimator
 
-Energy Forecasting Lab is a Streamlit app for estimating appliance energy use from indoor sensor readings, outdoor weather, and time based features.
+Home Energy Estimator is a custom web app that estimates appliance energy from room conditions, weather, and time of day.
 
-Live app: https://huggingface.co/spaces/hassanraza04/ds_final_proj
+The app does not use Streamlit. It serves a static frontend and a small Python prediction API from `app.py`.
 
-## What It Does
+## How It Works
 
-The app uses the UCI Appliances Energy Prediction dataset to train and compare five regression models:
+- The model is trained offline with `scripts/train_artifacts.py`.
+- The best saved model is stored in `artifacts/model_bundle.joblib`.
+- The website loads that artifact once.
+- Visitors adjust sliders and run fast inference.
+- No visitor can retrain the model from the public website.
 
-- Linear Regression
-- Ridge Regression
-- Lasso Regression
-- Random Forest
-- Gradient Boosting
+Current saved model:
 
-The app includes data exploration, live forecasting, model comparison, SHAP based explanations, and a short findings page.
-
-## Main Features
-
-- Dataset overview with row counts, missing values, feature types, and summary statistics
-- Distribution, time series, period, scatter, and correlation views
-- Forecast form for testing one set of conditions across trained models
-- Model ranking by R2, MAE, and RMSE
-- SHAP charts for feature impact and single prediction explanations
-- Saved model artifacts so the public app does not retrain on boot
-- Clear notes on model limits before real operational use
+- Model: Random Forest
+- Parameters: `n_estimators=300`, `max_depth=24`, `min_samples_leaf=1`
+- R2: `0.5663`
+- MAE: `30.88 Wh`
 
 ## Local Setup
-
-Clone the repo:
-
-```bash
-git clone https://github.com/hassanraza04/energy-forecasting.git
-cd energy-forecasting
-```
 
 Install dependencies:
 
@@ -53,7 +37,13 @@ pip install -r requirements.txt
 Run the app:
 
 ```bash
-python -m streamlit run app.py
+python app.py
+```
+
+Open:
+
+```text
+http://localhost:8501
 ```
 
 Run tests:
@@ -62,46 +52,41 @@ Run tests:
 pytest -v
 ```
 
-## Training Artifacts
+## Rebuild The Model Artifact
 
-The public app loads saved model artifacts from `artifacts/model_bundle.joblib`.
-
-To rebuild the artifacts after changing the dataset or model candidates, run:
+Run this after changing the dataset or candidate model settings:
 
 ```bash
 python scripts/train_artifacts.py
 ```
-
-The script tests a small set of sensible parameters offline, saves the best model from each family, and marks the strongest overall model in the bundle.
 
 ## Project Structure
 
 ```text
 .
 ├── app.py
-├── energydata_complete.csv
-├── requirements.txt
+├── Dockerfile
+├── artifacts
+│   └── model_bundle.joblib
+├── public
+│   ├── app.js
+│   ├── index.html
+│   └── styles.css
+├── scripts
+│   └── train_artifacts.py
 ├── src
-│   ├── content.py
+│   ├── artifacts.py
 │   ├── data_loader.py
 │   ├── modeling.py
 │   ├── prediction.py
-│   ├── page1_business.py
-│   ├── page2_eda.py
-│   ├── page3_predictions.py
-│   ├── page4_shap.py
-│   ├── page6_conclusions.py
-│   └── secrets.py
-├── scripts
-│   └── train_artifacts.py
+│   └── service.py
 └── tests
-    ├── conftest.py
+    ├── test_artifacts.py
     ├── test_modeling.py
-    └── test_prediction.py
+    ├── test_prediction.py
+    └── test_service.py
 ```
 
 ## Model Limits
 
-This app is a forecasting demo built from a public dataset. It is not connected to a live building, utility account, or appliance control system.
-
-Before using a model like this for real decisions, it would need fresh local data, sensor quality checks, retraining, drift monitoring, versioned model artifacts, and human review around any operational actions.
+This is an estimator built from a public dataset. It is not connected to a real building, utility account, or control system. Real use would need fresh local data, monitoring, and review before operational decisions.

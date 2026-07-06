@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Home Energy Estimator</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Appliance load estimate</p>
+          <h1>Estimate home energy before demand rises.</h1>
+          <p class="lede">
+            Adjust room conditions and weather inputs. The saved model returns an appliance energy estimate in watt-hours.
+          </p>
+        </div>
+        <div class="hero-visual" aria-label="Energy load visual">
+          <div class="meter">
+            <div class="meter-ring">
+              <span id="heroPrediction">--</span>
+              <small>Wh</small>
+            </div>
+            <div class="load-bars" aria-hidden="true">
+              <span style="--h: 34%"></span>
+              <span style="--h: 48%"></span>
+              <span style="--h: 72%"></span>
+              <span style="--h: 58%"></span>
+              <span style="--h: 82%"></span>
+              <span style="--h: 43%"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="workspace">
+        <form id="forecastForm" class="panel controls">
+          <div class="section-heading">
+            <p>Forecast inputs</p>
+            <h2>Set the conditions</h2>
+          </div>
+          <div id="presets" class="presets"></div>
+          <div id="inputs" class="input-grid"></div>
+          <button type="submit">Run estimate</button>
+        </form>
+
+        <aside class="panel result">
+          <div class="section-heading">
+            <p>Current estimate</p>
+            <h2 id="predictionValue">Ready</h2>
+          </div>
+          <p id="predictionText" class="result-copy">
+            Choose a preset or adjust the sliders, then run an estimate.
+          </p>
+          <dl class="stats">
+            <div>
+              <dt>Saved model</dt>
+              <dd id="modelName">Loading</dd>
+            </div>
+            <div>
+              <dt>Typical load</dt>
+              <dd id="averageValue">--</dd>
+            </div>
+            <div>
+              <dt>Model error</dt>
+              <dd id="maeValue">--</dd>
+            </div>
+          </dl>
+        </aside>
+      </section>
+
+      <section class="details">
+        <article>
+          <h2>What changes the estimate?</h2>
+          <p>
+            The model reads lighting use, room temperature, humidity, outside weather, and time of day as one input row.
+            It does not retrain when values change.
+          </p>
+        </article>
+        <article>
+          <h2>Model notes</h2>
+          <p id="modelNotes">
+            The model was trained offline and saved as an artifact. Public visitors only run fast inference.
+          </p>
+        </article>
+        <article>
+          <h2>Use with care</h2>
+          <p>
+            This is an estimator built from a public dataset. It should be validated with fresh local data before real operational use.
+          </p>
+        </article>
+      </section>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>

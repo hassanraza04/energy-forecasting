@@ -5,7 +5,6 @@ import os
 from typing import Optional, List
 
 import pandas as pd
-import streamlit as st
 
 BASE_DIR  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_PATH = os.path.join(BASE_DIR, "energydata_complete.csv")
@@ -58,10 +57,8 @@ def get_numeric_features(df: pd.DataFrame) -> List[str]:
     ]
 
 
-@st.cache_data(show_spinner="Loading dataset...")
 def get_data() -> pd.DataFrame:
     df = _load_raw()
     if df is None:
-        st.error("Dataset not found. Place `energydata_complete.csv` next to `app.py`.")
-        st.stop()
+        raise FileNotFoundError("Dataset not found. Place `energydata_complete.csv` next to `app.py`.")
     return _add_time_features(df)

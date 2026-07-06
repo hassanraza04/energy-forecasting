@@ -1,92 +1,118 @@
-"""Streamlit entry point for Energy Forecasting Lab."""
+"""Custom web server for the energy estimator."""
 from __future__ import annotations
 
-from dotenv import load_dotenv
-load_dotenv()
-
-import streamlit as st
-
-from src.content import (
-    APP_NAME,
-    APP_TAGLINE,
-    PAGE_EXPLAIN,
-    PAGE_EXPLORE,
-    PAGE_FINDINGS,
-    PAGE_FORECAST,
-    PAGE_OPTIONS,
-    PAGE_OVERVIEW,
-)
-
-st.set_page_config(
-    page_title=APP_NAME,
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+import json
+import mimetypes
+import os
+from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from typing import Any
 
 from src.artifacts import get_model_bundle
-from src.data_loader import get_data, get_numeric_features
-from src import (
-    page1_business,
-    page2_eda,
-    page3_predictions,
-    page4_shap,
-    page6_conclusions,
-)
+from src.service import build_app_config, predict_energy
 
-st.markdown("""
-<style>
-    [data-testid="stSidebar"] {
-        background: #0f172a;
-        border-right: 1px solid #1e293b;
-    }
-    [data-testid="stSidebar"] * {
-        color: #e2e8f0 !important;
-    }
-    h1 {
-        color: #e0f2fe;
-        letter-spacing: 0;
-    }
-    h2, h3 {
-        color: #bae6fd;
-        letter-spacing: 0;
-    }
-    .stMetric {
-        background: rgba(15, 23, 42, 0.42);
-        border: 1px solid rgba(148, 163, 184, 0.18);
-        border-radius: 8px;
-        padding: 0.85rem 1rem;
-    }
-    .stMetric label {
-        color: #94a3b8 !important;
-    }
-</style>
-""", unsafe_allow_html=True)
 
-with st.sidebar:
-    st.markdown(f"## {APP_NAME}")
-    st.caption(APP_TAGLINE)
-    st.divider()
-    page = st.radio("Navigate", PAGE_OPTIONS, label_visibility="collapsed")
-    st.divider()
-    st.caption("UCI Appliances Energy Prediction dataset")
+ROOT_DIR = Path(__file__).resolve().parent
+PUBLIC_DIR = ROOT_DIR / "public"
 
-df       = get_data()
-num_cols = get_numeric_features(df)
 
-if page == PAGE_OVERVIEW:
-    page1_business.render(df)
+def _json_bytes(payload: dict[str, Any]) -> bytes:
+    return json.dumps(payload).encode("utf-8")
 
-elif page == PAGE_EXPLORE:
-    page2_eda.render(df, num_cols)
 
-elif page == PAGE_FORECAST:
-    bundle = get_model_bundle()
-    page3_predictions.render(bundle)
+class EnergyRequestHandler(BaseHTTPRequestHandler):
+    server_version = "EnergyForecastingLab/1.0"
 
-elif page == PAGE_EXPLAIN:
-    bundle = get_model_bundle()
-    page4_shap.render(bundle)
+    def do_HEAD(self) -> None:
+        if self.path in {"/", "/index.html"}:
+            path = PUBLIC_DIR / "index.html"
+        else:
+            safe_path = self.path.split("?", 1)[0].lstrip("/")
+            path = PUBLIC_DIR / safe_path
 
-elif page == PAGE_FINDINGS:
-    bundle = get_model_bundle()
-    page6_conclusions.render(bundle)
+        try:
+            resolved = path.resolve()
+            if not str(resolved).startswith(str(PUBLIC_DIR.resolve())):
+                raise FileNotFoundError
+            size = resolved.stat().st_size
+        except (FileNotFoundError, IsADirectoryError):
+            self.send_response(HTTPStatus.NOT_FOUND)
+            self.end_headers()
+            return
+
+        content_type = mimetypes.guess_type(str(resolved))[0] or "application/octet-stream"
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(size))
+        self.end_headers()
+
+    def do_GET(self) -> None:
+        if self.path == "/api/config":
+            self._send_json(build_app_config(get_model_bundle()))
+            return
+
+        if self.path in {"/", "/index.html"}:
+            self._send_file(PUBLIC_DIR / "index.html")
+            return
+
+        safe_path = self.path.split("?", 1)[0].lstrip("/")
+        self._send_file(PUBLIC_DIR / safe_path)
+
+    def do_POST(self) -> None:
+        if self.path != "/api/predict":
+            self._send_json({"error": "Not found"}, HTTPStatus.NOT_FOUND)
+            return
+
+        try:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            body = self.rfile.read(content_length)
+            payload = json.loads(body.decode("utf-8")) if body else {}
+            result = predict_energy(get_model_bundle(), payload)
+            self._send_json(result)
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            self._send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+
+    def log_message(self, format: str, *args: Any) -> None:
+        return
+
+    def _send_json(
+        self,
+        payload: dict[str, Any],
+        status: HTTPStatus = HTTPStatus.OK,
+    ) -> None:
+        body = _json_bytes(payload)
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _send_file(self, path: Path) -> None:
+        try:
+            resolved = path.resolve()
+            if not str(resolved).startswith(str(PUBLIC_DIR.resolve())):
+                raise FileNotFoundError
+            body = resolved.read_bytes()
+        except (FileNotFoundError, IsADirectoryError):
+            self._send_json({"error": "Not found"}, HTTPStatus.NOT_FOUND)
+            return
+
+        content_type = mimetypes.guess_type(str(resolved))[0] or "application/octet-stream"
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+
+def run() -> None:
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", "8501"))
+    server = ThreadingHTTPServer((host, port), EnergyRequestHandler)
+    print(f"Serving Home Energy Estimator on http://{host}:{port}")
+    server.serve_forever()
+
+
+if __name__ == "__main__":
+    run()

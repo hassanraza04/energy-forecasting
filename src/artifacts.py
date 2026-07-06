@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any
 
 import joblib
-import streamlit as st
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -17,13 +16,18 @@ def load_artifact_bundle(path: str | Path = MODEL_BUNDLE_PATH) -> dict[str, Any]
     return joblib.load(Path(path))
 
 
-@st.cache_resource(show_spinner="Loading saved model bundle...")
+_MODEL_BUNDLE: dict[str, Any] | None = None
+
+
 def get_model_bundle(path: str = str(MODEL_BUNDLE_PATH)) -> dict[str, Any]:
+    global _MODEL_BUNDLE
+    if _MODEL_BUNDLE is not None:
+        return _MODEL_BUNDLE
     artifact_path = Path(path)
     if not artifact_path.exists():
-        st.error(
+        raise FileNotFoundError(
             "Saved model artifact is missing. Run `python scripts/train_artifacts.py` "
             "before starting the app."
         )
-        st.stop()
-    return load_artifact_bundle(artifact_path)
+    _MODEL_BUNDLE = load_artifact_bundle(artifact_path)
+    return _MODEL_BUNDLE
