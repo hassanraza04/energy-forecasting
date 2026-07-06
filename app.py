@@ -1,26 +1,29 @@
-"""
-app.py — Smart Energy Consumption Forecasting
-Entry point: page config, CSS, sidebar navigation, and page routing.
-All page logic lives in src/.
-"""
+"""Streamlit entry point for Energy Forecasting Lab."""
 from __future__ import annotations
 
-# Load .env first so all os.getenv() calls work everywhere
-import os
 from dotenv import load_dotenv
 load_dotenv()
 
 import streamlit as st
 
-# ── Must be first Streamlit call ──────────────────────────────────────────────
+from src.content import (
+    APP_NAME,
+    APP_TAGLINE,
+    PAGE_EXPLAIN,
+    PAGE_EXPLORE,
+    PAGE_FINDINGS,
+    PAGE_FORECAST,
+    PAGE_OPTIONS,
+    PAGE_OVERVIEW,
+    PAGE_TUNE,
+)
+
 st.set_page_config(
-    page_title="Smart Energy Forecasting",
-    page_icon="⚡",
+    page_title=APP_NAME,
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# ── src imports ───────────────────────────────────────────────────────────────
 from src.data_loader import (
     get_data,
     train_all_models,
@@ -36,57 +39,64 @@ from src import (
     page6_conclusions,
 )
 
-# ── Global CSS ────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-    [data-testid="stSidebar"] { background: #0f172a; }
-    [data-testid="stSidebar"] * { color: #e2e8f0 !important; }
-    h1 { color: #38bdf8; }
-    h2, h3 { color: #7dd3fc; }
-    .stMetric label { color: #94a3b8 !important; }
+    [data-testid="stSidebar"] {
+        background: #0f172a;
+        border-right: 1px solid #1e293b;
+    }
+    [data-testid="stSidebar"] * {
+        color: #e2e8f0 !important;
+    }
+    h1 {
+        color: #e0f2fe;
+        letter-spacing: 0;
+    }
+    h2, h3 {
+        color: #bae6fd;
+        letter-spacing: 0;
+    }
+    .stMetric {
+        background: rgba(15, 23, 42, 0.42);
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 8px;
+        padding: 0.85rem 1rem;
+    }
+    .stMetric label {
+        color: #94a3b8 !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# ── Sidebar navigation ────────────────────────────────────────────────────────
-PAGES = [
-    "🏠 Business Case & Data",
-    "📊 Data Visualisation",
-    "🤖 Model Predictions",
-    "🔍 Explainability (SHAP)",
-    "⚙️  Hyperparameter Tuning",
-    "🏁 Conclusions",
-]
-
 with st.sidebar:
-    st.markdown("## ⚡ Smart Energy\nForecasting Dashboard")
-    st.markdown("---")
-    page = st.radio("Navigate", PAGES, label_visibility="collapsed")
-    st.markdown("---")
-    st.caption("DS Final Project · Energy Dataset")
+    st.markdown(f"## {APP_NAME}")
+    st.caption(APP_TAGLINE)
+    st.divider()
+    page = st.radio("Navigate", PAGE_OPTIONS, label_visibility="collapsed")
+    st.divider()
+    st.caption("UCI Appliances Energy Prediction dataset")
 
-# ── Load data (cached) ────────────────────────────────────────────────────────
 df       = get_data()
 num_cols = get_numeric_features(df)
 
-# ── Route to page ─────────────────────────────────────────────────────────────
-if page == PAGES[0]:
+if page == PAGE_OVERVIEW:
     page1_business.render(df)
 
-elif page == PAGES[1]:
+elif page == PAGE_EXPLORE:
     page2_eda.render(df, num_cols)
 
-elif page == PAGES[2]:
+elif page == PAGE_FORECAST:
     bundle = train_all_models(DATA_PATH)
     page3_predictions.render(bundle)
 
-elif page == PAGES[3]:
+elif page == PAGE_EXPLAIN:
     bundle = train_all_models(DATA_PATH)
     page4_shap.render(bundle)
 
-elif page == PAGES[4]:
+elif page == PAGE_TUNE:
     bundle = train_all_models(DATA_PATH)
     page5_tuning.render(bundle)
 
-elif page == PAGES[5]:
+elif page == PAGE_FINDINGS:
     bundle = train_all_models(DATA_PATH)
     page6_conclusions.render(bundle)
