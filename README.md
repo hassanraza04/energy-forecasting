@@ -1,62 +1,106 @@
 ---
-title: Energy Forecasting App
-emoji: ⚡
+title: Energy Forecasting Lab
 colorFrom: blue
-colorTo: green
+colorTo: cyan
 sdk: streamlit
 app_file: app.py
 pinned: false
 ---
-# ⚡ Smart Energy Consumption Forecasting Dashboard
 
-A professional, end-to-end machine learning application built with **Streamlit** to predict appliance energy consumption in residential buildings. This project leverages the **UCI Appliances Energy Prediction Dataset** to drive smarter, data-backed building management.
+# Energy Forecasting Lab
 
-## 🚀 Key Features
-- **Interactive EDA**: 5 dynamic visualisation modules (Distribution, Time Series, Periods, Scatter, Heatmap).
-- **Multi-Model Engine**: Compare 5 Regression architectures (Linear, Ridge, Lasso, Random Forest, Gradient Boosting).
-- **Live Prediction Form**: Input real-time environmental data to receive an instant energy forecast.
-- **XAI (Explainable AI)**: Deep-dive into model decision-making using **SHAP** values.
-- **MLOps Integration**: Track hyperparameter tuning experiments live on **Weights & Biases**.
+Energy Forecasting Lab is a Streamlit app for estimating appliance energy use from indoor sensor readings, outdoor weather, and time based features.
 
-## 🛠️ Technology Stack
-- **Framework**: Streamlit
-- **Processing**: NumPy, Pandas
-- **Modeling**: Scikit-Learn
-- **Explainability**: SHAP
-- **Tracking**: Weights & Biases (W&B)
-- **Visualisation**: Plotly, Seaborn, Matplotlib
+Live app: https://huggingface.co/spaces/hassanraza04/ds_final_proj
 
-## 📦 Installation & Setup
+## What It Does
 
-1. **Clone the repository:**
-   ```bash
-   git clone <your-repo-url>
-   cd ds_final
-   ```
+The app uses the UCI Appliances Energy Prediction dataset to train and compare five regression models:
 
-2. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+- Linear Regression
+- Ridge Regression
+- Lasso Regression
+- Random Forest
+- Gradient Boosting
 
-3. **Configure Secrets:**
-   Create a `.env` file in the root directory (already gitignored):
-   ```env
-   WANDB_API_KEY=your_key_here
-   WANDB_PROJECT=energy-forecasting
-   ```
+The app includes data exploration, live forecasting, model comparison, SHAP based explanations, small grid search experiments, and a short findings page.
 
-4. **Launch the App:**
-   ```bash
-   python3 -m streamlit run app.py
-   ```
+## Main Features
 
-## 🌐 Deployment
-- **HuggingFace Space**: [Link to your space]
-- **Streamlit Cloud**: [Link to your app]
+- Dataset overview with row counts, missing values, feature types, and summary statistics
+- Distribution, time series, period, scatter, and correlation views
+- Forecast form for testing one set of conditions across trained models
+- Model ranking by R2, MAE, and RMSE
+- SHAP charts for feature impact and single prediction explanations
+- Optional Weights & Biases logging for tuning runs
+- Clear notes on model limits before real operational use
 
-## 👥 Team
-- **Hassan Raza** & Team
+## Local Setup
 
----
-*Developed for the Data Science Final Project - April 2026*
+Clone the repo:
+
+```bash
+git clone https://github.com/hassanraza04/energy-forecasting.git
+cd energy-forecasting
+```
+
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+Run the app:
+
+```bash
+python -m streamlit run app.py
+```
+
+Run tests:
+
+```bash
+pytest -v
+```
+
+## Environment Variables
+
+Weights & Biases logging is optional. Set these values only if you want tuning runs logged outside the app:
+
+```env
+WANDB_API_KEY=your_key_here
+WANDB_ENTITY=your_entity_here
+WANDB_PROJECT=energy-forecasting
+```
+
+The app still runs without these values.
+
+## Project Structure
+
+```text
+.
+├── app.py
+├── energydata_complete.csv
+├── requirements.txt
+├── src
+│   ├── content.py
+│   ├── data_loader.py
+│   ├── modeling.py
+│   ├── prediction.py
+│   ├── page1_business.py
+│   ├── page2_eda.py
+│   ├── page3_predictions.py
+│   ├── page4_shap.py
+│   ├── page5_tuning.py
+│   ├── page6_conclusions.py
+│   └── secrets.py
+└── tests
+    ├── conftest.py
+    ├── test_modeling.py
+    └── test_prediction.py
+```
+
+## Model Limits
+
+This app is a forecasting demo built from a public dataset. It is not connected to a live building, utility account, or appliance control system.
+
+Before using a model like this for real decisions, it would need fresh local data, sensor quality checks, retraining, drift monitoring, versioned model artifacts, and human review around any operational actions.
